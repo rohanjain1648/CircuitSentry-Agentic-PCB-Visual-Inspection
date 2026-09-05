@@ -50,6 +50,9 @@ venv/
 ENV/
 env/
 
+# CDK
+cdk.out/
+
 # IDE
 .vscode/
 .idea/
