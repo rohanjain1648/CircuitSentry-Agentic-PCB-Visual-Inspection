@@ -26,6 +26,22 @@ def test_ambiguous_confidence_requests_recapture():
 def test_ambiguous_confidence_flags_after_max_attempts():
     mid = (LOW_CONFIDENCE + HIGH_CONFIDENCE) / 2
     region = _region(mid)
-    attempt_counts = {region.bbox: MAX_RECAPTURE_ATTEMPTS}
-    [result] = decide([region], attempt_counts=attempt_counts)
+    attempt_counts = {"run1:0": MAX_RECAPTURE_ATTEMPTS}
+    [result] = decide([region], attempt_counts=attempt_counts, region_ids=["run1:0"])
+    assert result.action == "flag_for_approval"
+
+
+def test_attempt_counts_keyed_by_region_id_not_bbox():
+    """A recapture changes the coordinate frame, so bbox is not an identity."""
+    mid = (LOW_CONFIDENCE + HIGH_CONFIDENCE) / 2
+    # Same logical region, but a totally different bbox after the crop+zoom.
+    recaptured = Region(bbox=(0, 0, 90, 90), confidence=mid, defect_type_guess="x")
+    attempt_counts = {"run1:0": MAX_RECAPTURE_ATTEMPTS}
+    [result] = decide([recaptured], attempt_counts=attempt_counts, region_ids=["run1:0"])
+    assert result.action == "flag_for_approval"
+
+
+def test_region_ids_default_to_positional_index():
+    mid = (LOW_CONFIDENCE + HIGH_CONFIDENCE) / 2
+    [result] = decide([_region(mid)], attempt_counts={"0": MAX_RECAPTURE_ATTEMPTS})
     assert result.action == "flag_for_approval"

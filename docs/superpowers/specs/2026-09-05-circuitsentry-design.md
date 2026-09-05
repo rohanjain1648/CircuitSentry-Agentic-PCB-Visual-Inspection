@@ -42,9 +42,13 @@ needed):
 2. **Diff**: absolute difference of aligned grayscale images, adaptive
    threshold, morphological open/close to suppress noise.
 3. **Candidate localization**: contour extraction on the cleaned diff mask.
-4. **Scoring**: per-contour confidence from area, diff intensity, and shape
-   heuristics, with a coarse defect-type guess (missing component / solder
-   bridge / tombstoning / scratch-burn).
+4. **Scoring**: per-contour confidence from **contour area alone**, scaled
+   linearly and saturating at a fixed area threshold. Diff intensity is not a
+   confidence input — the adaptive threshold in step (2) binarizes the diff,
+   so intensity information is already discarded by the time contours are
+   extracted. Shape heuristics (bounding-box aspect ratio) feed only the
+   coarse defect-type guess (missing component / solder bridge / tombstoning
+   / scratch-burn), never the confidence value.
 5. Output: `[{bbox, defect_type_guess, confidence}, ...]` per frame.
 
 ## 4. Decision engine (rule-based)
