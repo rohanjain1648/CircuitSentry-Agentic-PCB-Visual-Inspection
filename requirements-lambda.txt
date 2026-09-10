@@ -1,0 +1,13 @@
+# Runtime dependencies installed INTO the Lambda deployment package by the
+# Docker bundling step in infra/circuitsentry_stack.py (bundle_dependencies=True).
+# Keep this separate from the top-level requirements.txt: that file also pulls
+# in aws-cdk-lib, pytest, and moto, which have no place in a deployed function
+# and would blow well past the Lambda 250MB unzipped limit.
+#
+# boto3 is deliberately omitted: the Lambda Python runtime already provides an
+# AWS SDK, and vendoring our own would just add size without changing behavior
+# for the calls this project makes (S3 get/put, DynamoDB put/query, Step
+# Functions StartExecution). Revisit only if a handler needs a boto3 feature
+# newer than what the current runtime ships.
+opencv-python-headless>=4.10
+numpy>=1.26

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from aws_cdk import Stack, RemovalPolicy, Duration, CfnOutput
+from aws_cdk import Stack, RemovalPolicy, Duration, CfnOutput, BundlingOptions
 from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_s3_deployment as s3_deployment
 from aws_cdk import aws_dynamodb as dynamodb
@@ -38,36 +38,48 @@ LAMBDA_ASSET_EXCLUDE = [
     "*.md",
 ]
 
-# ---------------------------------------------------------------------------
-# TODO (deployment blocker — NOT solved here): the Lambda functions below are
-# packaged from source only. Their third-party dependencies (opencv-python-
-# headless, numpy; boto3 is present in the Lambda runtime but pinning it is
-# safer) are NOT included, so a real `cdk deploy` produces functions that fail
-# at import time with ModuleNotFoundError: cv2.
-#
-# Two supported ways to fix this before deploying:
-#   (a) Lambda layer(s) carrying the dependencies. numpy + opencv-python-
-#       headless are large (~100MB+ unzipped, near the 250MB Lambda limit), so
-#       use opencv-python-headless, not opencv-python. AWS-community "Klayers"
-#       publishes a public opencv-python-headless layer per region that can be
-#       referenced by ARN via _lambda.LayerVersion.from_layer_version_arn().
-#   (b) CDK asset bundling with a Docker image matching the
-#       Runtime.PYTHON_3_12 manylinux target, e.g.
-#           _lambda.Code.from_asset(str(REPO_ROOT), bundling=BundlingOptions(
-#               image=_lambda.Runtime.PYTHON_3_12.bundling_image,
-#               command=["bash", "-c", "pip install -r requirements.txt -t /asset-output && cp -r circuitsentry /asset-output"],
-#           ))
-#       This requires Docker at synth time, which is not available in this
-#       project's development sandbox, so it is deliberately left uncommitted
-#       and unverified rather than shipped as an untested stub.
-# ---------------------------------------------------------------------------
+LAMBDA_REQUIREMENTS = REPO_ROOT / "requirements-lambda.txt"
+
+
+def _lambda_code(bundle_dependencies: bool) -> _lambda.Code:
+    """Package the repo root as the Lambda asset.
+
+    Every handler string ("circuitsentry.backend...") and internal import
+    ("from circuitsentry.vision.pipeline import inspect") expects
+    `circuitsentry` to be an importable top-level package under /var/task/,
+    so the asset root stays REPO_ROOT either way.
+
+    With bundle_dependencies=True (real deploys, via infra/app.py), this also
+    pip-installs requirements-lambda.txt (opencv-python-headless, numpy) into
+    the package inside a manylinux Docker image matching the Lambda runtime —
+    without it, deployed functions fail at import time with
+    ModuleNotFoundError: cv2. Docker is required at synth time for this path.
+
+    With bundle_dependencies=False (the default — used by the test suite,
+    which has no dependency on Docker being installed), the asset is packaged
+    from source only, same as before dependency bundling was wired up.
+    """
+    if not bundle_dependencies:
+        return _lambda.Code.from_asset(str(REPO_ROOT), exclude=LAMBDA_ASSET_EXCLUDE)
+    return _lambda.Code.from_asset(
+        str(REPO_ROOT),
+        exclude=LAMBDA_ASSET_EXCLUDE,
+        bundling=BundlingOptions(
+            image=_lambda.Runtime.PYTHON_3_12.bundling_image,
+            command=[
+                "bash", "-c",
+                "pip install -r requirements-lambda.txt -t /asset-output "
+                "&& cp -r circuitsentry /asset-output",
+            ],
+        ),
+    )
 
 
 class CircuitSentryStack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, *, bundle_dependencies: bool = False, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        lambda_code = _lambda.Code.from_asset(str(REPO_ROOT), exclude=LAMBDA_ASSET_EXCLUDE)
+        lambda_code = _lambda_code(bundle_dependencies)
 
         self.images_bucket = s3.Bucket(
             self, "ImagesBucket",

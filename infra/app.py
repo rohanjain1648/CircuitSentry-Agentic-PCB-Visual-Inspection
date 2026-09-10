@@ -10,5 +10,9 @@ import aws_cdk as cdk
 from infra.circuitsentry_stack import CircuitSentryStack
 
 app = cdk.App()
-CircuitSentryStack(app, "CircuitSentryStack")
+# bundle_dependencies=True: real deploys need opencv-python-headless/numpy
+# installed into the Lambda package via Docker (see circuitsentry_stack.py).
+# The test suite instantiates CircuitSentryStack directly and leaves this at
+# its default (False) so tests don't require Docker.
+CircuitSentryStack(app, "CircuitSentryStack", bundle_dependencies=True)
 app.synth()
