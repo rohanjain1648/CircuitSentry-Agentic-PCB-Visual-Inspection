@@ -63,3 +63,5 @@ cdk.out/
 # OS
 .DS_Store
 Thumbs.db
+
+docs/devpost.md
